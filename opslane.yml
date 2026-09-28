@@ -1,0 +1,32 @@
+dockerfile: packages/twenty-docker/twenty/Dockerfile
+build_target: twenty
+port: 3000
+health_path: /healthz
+services:
+  - type: postgres
+    version: postgres:16
+    extensions: [uuid-ossp, unaccent]
+  - redis
+env:
+  PG_DATABASE_URL: postgres://app:app@pg:5432/app
+  SERVER_URL: http://localhost:3000
+  APP_SECRET: 073bfe7164f9d0605cf926b2042fbcae2d4dcf258a987def7b43ec50e3570d02
+  ENCRYPTION_KEY: 073bfe7164f9d0605cf926b2042fbcae2d4dcf258a987def7b43ec50e3570d02
+  STORAGE_TYPE: local
+  IS_BILLING_ENABLED: "false"
+  SIGN_IN_PREFILLED: "true"
+  DISABLE_CRON_JOBS_REGISTRATION: "true"
+migrate: yarn database:init:prod
+seed: yarn command:prod workspace:seed:dev --light
+verify_setup:
+  instructions: |
+    Seeded login: tim@apple.dev / tim@apple.dev (Admin of the "Apple" workspace).
+    Sign in at /welcome with "Continue with Email"; the credentials are prefilled.
+    The light seed creates only the Apple workspace with up to 5 records per object
+    (companies, people, opportunities, ...). After sign-in you land on the workspace's
+    record index pages.
+notes: |
+  Single container: the server serves the built frontend. No worker process runs, so
+  background jobs (email sync, workflows queued to the worker) do not execute.
+  The entrypoint runs cache flush and upgrade on boot; migrate initializes the schema first
+  because the seed needs it (one-shots bypass the entrypoint).
