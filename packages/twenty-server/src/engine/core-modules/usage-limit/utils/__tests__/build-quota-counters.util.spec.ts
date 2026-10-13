@@ -3,6 +3,7 @@ import { type QuotaLimitDefault } from 'src/engine/core-modules/usage-limit/type
 import { buildQuotaCounters } from 'src/engine/core-modules/usage-limit/utils/build-quota-counters.util';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
+import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 
 const MONTH_PERIOD = {
   periodStart: new Date('2026-08-01T00:00:00.000Z'),
@@ -23,7 +24,7 @@ const buildLimit = (overrides: Partial<FlatQuotaLimit>): FlatQuotaLimit => ({
   limitKind: 'quota',
   periodCount: 1,
   periodUnit: 'month',
-  meter: 'creditsUsedMicro',
+  unit: UsageUnit.CREDIT,
   limitValue: 1_000_000,
   burstValue: null,
   isInstanceOverride: false,
@@ -38,7 +39,7 @@ const buildDefault = (
   limitKind: 'quota',
   spenderType: 'workspace',
   spenderId: '',
-  meter: 'creditsUsedMicro',
+  unit: UsageUnit.CREDIT,
   periodUnit: 'month',
   periodCount: 1,
   isOverridable: true,
@@ -72,9 +73,9 @@ describe('buildQuotaCounters', () => {
       {
         kind: 'limit',
         isDefault: false,
-        key: `{workspace-1}:quota:AI:AI_CHAT_TOKEN:workspace:-:creditsUsedMicro:month:${MONTH_PERIOD.periodStart.getTime()}`,
+        key: `{workspace-1}:quota-consumed:AI:AI_CHAT_TOKEN:workspace:-:CREDIT:month:${MONTH_PERIOD.periodStart.getTime()}`,
         limitValue: 1_000_000,
-        meter: 'creditsUsedMicro',
+        unit: UsageUnit.CREDIT,
         resourceType: UsageResourceType.AI,
         periodUnit: 'month',
         periodStart: MONTH_PERIOD.periodStart,
@@ -167,9 +168,9 @@ describe('buildQuotaCounters', () => {
       {
         kind: 'limit',
         isDefault: true,
-        key: `{workspace-1}:quota:AI:AI_CHAT_TOKEN:workspace:-:creditsUsedMicro:month:${MONTH_PERIOD.periodStart.getTime()}:default:5000`,
+        key: `{workspace-1}:quota-consumed:AI:AI_CHAT_TOKEN:workspace:-:CREDIT:month:${MONTH_PERIOD.periodStart.getTime()}`,
         limitValue: 5_000,
-        meter: 'creditsUsedMicro',
+        unit: UsageUnit.CREDIT,
         resourceType: UsageResourceType.AI,
         periodUnit: 'month',
         periodStart: MONTH_PERIOD.periodStart,
@@ -182,40 +183,26 @@ describe('buildQuotaCounters', () => {
   });
 
   it.each([500, 50_000])(
-    'overrides the default with a workspace limit of %i',
+    'overrides the default with a workspace limit of %i on the same counter',
     (limitValue) => {
+      const [defaultCounter] = buildCounters({
+        quotaLimitDefaults: [buildDefault()],
+      });
+
       const counters = buildCounters({
         limits: [buildLimit({ limitValue })],
         quotaLimitDefaults: [buildDefault()],
       });
 
       expect(counters).toEqual([
-        expect.objectContaining({ isDefault: false, limitValue }),
+        expect.objectContaining({
+          isDefault: false,
+          limitValue,
+          key: defaultCounter.key,
+        }),
       ]);
     },
   );
-
-  it('keeps a non-overridable default alongside a stored limit', () => {
-    const counters = buildCounters({
-      limits: [buildLimit({})],
-      quotaLimitDefaults: [buildDefault({ isOverridable: false })],
-    });
-
-    expect(counters.map((counter) => counter.isDefault)).toEqual([false, true]);
-    expect(new Set(counters.map((counter) => counter.key)).size).toBe(2);
-  });
-
-  it.each([
-    { spenderType: 'userWorkspace' as const, spenderId: 'user-1' },
-    { meter: 'quantity' as const },
-  ])('preserves the default for a different scope: %j', (overrides) => {
-    const counters = buildCounters({
-      limits: [buildLimit(overrides)],
-      quotaLimitDefaults: [buildDefault()],
-    });
-
-    expect(counters.map((counter) => counter.isDefault)).toEqual([false, true]);
-  });
 
   it('skips a default whose period was not resolved', () => {
     const counters = buildCounters({
@@ -233,15 +220,6 @@ describe('buildQuotaCounters', () => {
     expect(counters).toEqual([]);
   });
 
-  it('preserves the default against a row scoped to every operation', () => {
-    const counters = buildCounters({
-      limits: [buildLimit({ operationType: UsageOperationType.ALL })],
-      quotaLimitDefaults: [buildDefault()],
-    });
-
-    expect(counters.map((counter) => counter.isDefault)).toEqual([true, false]);
-  });
-
   it('ignores a default declared on another operation', () => {
     const counters = buildCounters({
       quotaLimitDefaults: [
@@ -252,7 +230,7 @@ describe('buildQuotaCounters', () => {
     expect(counters).toEqual([]);
   });
 
-  it('overrides the default whatever period the stored limit spans', () => {
+  it('keeps the default alongside a stored limit on another period', () => {
     const counters = buildCounters({
       limits: [buildLimit({ periodUnit: 'week' })],
       quotaLimitDefaults: [buildDefault()],
@@ -260,6 +238,8 @@ describe('buildQuotaCounters', () => {
 
     expect(counters).toEqual([
       expect.objectContaining({ isDefault: false, periodUnit: 'week' }),
+      expect.objectContaining({ isDefault: true, periodUnit: 'month' }),
     ]);
+    expect(new Set(counters.map((counter) => counter.key)).size).toBe(2);
   });
 });

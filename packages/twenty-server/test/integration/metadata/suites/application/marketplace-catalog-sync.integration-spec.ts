@@ -17,6 +17,7 @@ import { getAppProviderByClassName } from 'test/integration/utils/get-app-provid
 import { type DataSource } from 'typeorm';
 
 import { MARKETPLACE_VETTED_APPLICATIONS } from 'src/engine/core-modules/application/application-marketplace/constants/marketplace-vetted-applications.constant';
+import { type ApplicationRegistrationLookupService } from 'src/engine/core-modules/application/application-registration/application-registration-lookup/application-registration-lookup.service';
 import { type ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
 import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/application/application-registration/enums/application-registration-source-type.enum';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
@@ -87,6 +88,10 @@ describe('Marketplace Catalog Sync (integration)', () => {
     const npmUid = crypto.randomUUID();
     const tarballUid = crypto.randomUUID();
     const curatedUid = 'a1b2c3d4-0000-0000-0000-000000000001';
+    const serverCompatibleUid = crypto.randomUUID();
+    const serverIncompatibleUid = crypto.randomUUID();
+    const blankServerRangeUid = crypto.randomUUID();
+    const nonStringServerRangeUid = crypto.randomUUID();
 
     // Insert all data before queries so the in-memory cache is populated once
     // with complete data rather than being stale for later tests.
@@ -131,6 +136,42 @@ describe('Marketplace Catalog Sync (integration)', () => {
         },
         category: 'Data',
       });
+
+      await insertCatalogRegistration({
+        universalIdentifier: serverCompatibleUid,
+        name: 'Server Compatible App',
+        sourcePackage: '@test/server-compatible-app',
+        manifest: {
+          application: { requiredServerVersionRange: '>=1.0.0' },
+        },
+      });
+
+      await insertCatalogRegistration({
+        universalIdentifier: serverIncompatibleUid,
+        name: 'Server Incompatible App',
+        sourcePackage: '@test/server-incompatible-app',
+        manifest: {
+          application: { requiredServerVersionRange: '>=999.0.0' },
+        },
+      });
+
+      await insertCatalogRegistration({
+        universalIdentifier: blankServerRangeUid,
+        name: 'Blank Server Range App',
+        sourcePackage: '@test/blank-server-range-app',
+        manifest: {
+          application: { requiredServerVersionRange: ' ' },
+        },
+      });
+
+      await insertCatalogRegistration({
+        universalIdentifier: nonStringServerRangeUid,
+        name: 'Non String Server Range App',
+        sourcePackage: '@test/non-string-server-range-app',
+        manifest: {
+          application: { requiredServerVersionRange: 2 },
+        },
+      });
     });
 
     it('should return npm-sourced registrations from the database', async () => {
@@ -167,6 +208,27 @@ describe('Marketplace Catalog Sync (integration)', () => {
       expect(curatedApp.name).toBe('Data Enrichment');
       expect(curatedApp.category).toBe('Data');
     });
+
+    it('should not list apps whose required server version the server does not satisfy', async () => {
+      const res = await gqlRequest(MARKETPLACE_QUERY).expect(200);
+      const appIds = res.body.data.findManyMarketplaceApps.map(
+        (app: { id: string }) => app.id,
+      );
+
+      expect(appIds).toContain(serverCompatibleUid);
+      expect(appIds).not.toContain(serverIncompatibleUid);
+      expect(appIds).not.toContain(blankServerRangeUid);
+      expect(appIds).not.toContain(nonStringServerRangeUid);
+    });
+
+    it('should list apps that declare no required server version', async () => {
+      const res = await gqlRequest(MARKETPLACE_QUERY).expect(200);
+      const appIds = res.body.data.findManyMarketplaceApps.map(
+        (app: { id: string }) => app.id,
+      );
+
+      expect(appIds).toEqual(expect.arrayContaining([npmUid, curatedUid]));
+    });
   });
 
   describe('catalog sync', () => {
@@ -176,6 +238,10 @@ describe('Marketplace Catalog Sync (integration)', () => {
         const applicationRegistrationService =
           getAppProviderByClassName<ApplicationRegistrationService>(
             'ApplicationRegistrationService',
+          );
+        const applicationRegistrationLookupService =
+          getAppProviderByClassName<ApplicationRegistrationLookupService>(
+            'ApplicationRegistrationLookupService',
           );
         const universalIdentifier = isVetted
           ? crypto.randomUUID()
@@ -195,7 +261,7 @@ describe('Marketplace Catalog Sync (integration)', () => {
         };
 
         expect(
-          await applicationRegistrationService.findOneByUniversalIdentifierGlobal(
+          await applicationRegistrationLookupService.findOneByUniversalIdentifierGlobal(
             universalIdentifier,
           ),
         ).toBeNull();
@@ -204,7 +270,7 @@ describe('Marketplace Catalog Sync (integration)', () => {
           await applicationRegistrationService.upsertFromCatalog(catalogParams);
 
           const registration =
-            await applicationRegistrationService.findOneByUniversalIdentifierGlobal(
+            await applicationRegistrationLookupService.findOneByUniversalIdentifierGlobal(
               universalIdentifier,
             );
 

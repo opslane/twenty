@@ -63,28 +63,32 @@ export const buildAgentMessageStandardFlatFieldMetadatas = (
     writability: MetadataWritability.SYSTEM,
     isAuditLogged: false,
   },
-  senderUserWorkspaceId: {
-    ...createStandardFieldFlatMetadata({
+  senderWorkspaceMember: {
+    ...createStandardRelationFieldFlatMetadata({
       ...args,
       context: {
-        fieldName: 'senderUserWorkspaceId',
-        type: FieldMetadataType.UUID,
+        fieldName: 'senderWorkspaceMember',
+        type: FieldMetadataType.RELATION,
         label: i18nLabel(
-          msg({
-            message: 'Sender workspace membership ID',
-            context: 'fieldMetadata.label',
-          }),
+          msg({ message: 'Sender', context: 'fieldMetadata.label' }),
         ),
         description: i18nLabel(
           msg({
-            message: 'Sender workspace membership ID',
+            message: 'Workspace member who sent this message',
             context: 'fieldMetadata.description',
           }),
         ),
         icon: 'IconUser',
-        isSystem: true,
         isUIEditable: false,
         isNullable: true,
+        targetObjectName: 'workspaceMember',
+        targetFieldName: 'agentMessages',
+        morphId: null,
+        settings: {
+          relationType: RelationType.MANY_TO_ONE,
+          onDelete: RelationOnDeleteAction.SET_NULL,
+          joinColumnName: 'senderWorkspaceMemberId',
+        },
       },
     }),
     writability: MetadataWritability.SYSTEM,
@@ -155,28 +159,6 @@ export const buildAgentMessageStandardFlatFieldMetadatas = (
         isUIEditable: false,
         isNullable: false,
         defaultValue: "'sent'",
-      },
-    }),
-    writability: MetadataWritability.SYSTEM,
-    isAuditLogged: false,
-  },
-  isHidden: {
-    ...createStandardFieldFlatMetadata({
-      ...args,
-      context: {
-        fieldName: 'isHidden',
-        type: FieldMetadataType.BOOLEAN,
-        label: i18nLabel(
-          msg({ message: 'Is Hidden', context: 'fieldMetadata.label' }),
-        ),
-        description: i18nLabel(
-          msg({ message: 'Is Hidden', context: 'fieldMetadata.description' }),
-        ),
-        icon: 'IconToggleLeft',
-        isSystem: true,
-        isUIEditable: false,
-        isNullable: false,
-        defaultValue: false,
       },
     }),
     writability: MetadataWritability.SYSTEM,

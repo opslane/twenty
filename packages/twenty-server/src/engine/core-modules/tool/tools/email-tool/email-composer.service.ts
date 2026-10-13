@@ -10,6 +10,7 @@ import {
 } from 'twenty-shared/types';
 import {
   canConnectedAccountPerformEmailOperation,
+  convertEmailBodyToEmailDocument,
   getEmailProvidersForOperation,
   isDefined,
   isNonEmptyArray,
@@ -298,8 +299,8 @@ export class EmailComposerService {
     return attachments;
   }
 
-  // Resolve parent's root thread id (Gmail/MS native or stored) + RFC 5322 §3.6.4
-  // References chain so replies thread on both Twenty and recipient mail clients.
+  // Parent's root thread id (provider-native or stored) and RFC 5322 §3.6.4 References chain, so replies thread
+  // on both Twenty and recipient mail clients.
   private async getParentThreadContext(
     workspaceId: string,
     inReplyTo: string,
@@ -439,8 +440,17 @@ export class EmailComposerService {
 
     const attachments = await this.getAttachments(files || [], workspaceId);
 
+    const bodyConversionResult = convertEmailBodyToEmailDocument(body ?? '');
+
+    if (!bodyConversionResult.success) {
+      throw new EmailToolException(
+        `Invalid outbound email document: ${bodyConversionResult.error}`,
+        EmailToolExceptionCode.INVALID_EMAIL_BODY,
+      );
+    }
+
     const { html: sanitizedHtmlBody, plainText: plainTextBody } =
-      await compileOutboundEmailContent(body ?? '');
+      await compileOutboundEmailContent(bodyConversionResult.document);
     const sanitizedSubject = await sanitizeOutboundEmailSubject(subject || '');
 
     const { threadExternalId, references } =

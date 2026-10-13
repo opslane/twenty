@@ -16,7 +16,7 @@ const RadioExample = ({
   selected = false,
   ...props
 }: RadioProps & { selected?: boolean }) => (
-  <RadioGroup defaultValue={selected ? props.value : ''}>
+  <RadioGroup aria-label="Choice" defaultValue={selected ? props.value : ''}>
     <Radio {...props} />
   </RadioGroup>
 );
@@ -51,8 +51,7 @@ export const Default: Story = {
 };
 
 export const Documentation: Story = {
-  ...Default,
-  play: undefined,
+  decorators: Default.decorators,
 };
 
 export const Catalog: CatalogStory<Story, typeof RadioExample> = {
@@ -87,4 +86,49 @@ export const CatalogDark: typeof Catalog = {
   ...Catalog,
   tags: ['!autodocs'],
   globals: { colorScheme: 'dark' },
+};
+
+export const CardsDocumentation: Story = {
+  decorators: [ComponentDecorator],
+  render: () => (
+    <RadioGroup
+      aria-label="Default view"
+      defaultValue="table"
+      style={{ width: 280 }}
+    >
+      <Radio variant="card" value="table">
+        Table view
+      </Radio>
+      <Radio variant="card" value="board">
+        Board view
+      </Radio>
+    </RadioGroup>
+  ),
+};
+
+export const CardsCatalog: typeof Catalog = {
+  ...Catalog,
+  args: { variant: 'card' },
+};
+
+export const CardsCatalogDark: typeof Catalog = {
+  ...CardsCatalog,
+  tags: ['!autodocs'],
+  globals: { colorScheme: 'dark' },
+};
+
+export const PartsDocumentation: Story = {
+  decorators: [ComponentDecorator],
+  render: () => (
+    <RadioGroup aria-label="Storage" defaultValue="ssd">
+      <Radio.Root value="ssd">
+        <Radio.Indicator keepMounted>✓</Radio.Indicator>
+        SSD
+      </Radio.Root>
+      <Radio.Root value="hdd">
+        <Radio.Indicator keepMounted>✓</Radio.Indicator>
+        HDD
+      </Radio.Root>
+    </RadioGroup>
+  ),
 };

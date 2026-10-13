@@ -634,7 +634,7 @@ describe('workspace permissions', () => {
               `,
           variables: {
             input: {
-              publicFeatureFlag: FeatureFlagKey.IS_UNIQUE_INDEXES_ENABLED,
+              publicFeatureFlag: FeatureFlagKey.IS_JSON_FILTER_ENABLED,
               value: true,
             },
           },

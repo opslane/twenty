@@ -20,8 +20,9 @@ import { useNextInterval } from '@/settings/billing/hooks/useNextInterval';
 import { useNextPlan } from '@/settings/billing/hooks/useNextPlan';
 import { useSplitPhaseItemsInPrices } from '@/settings/billing/hooks/useSplitPhaseItemsInPrices';
 import { billingHasPaymentMethodSelector } from '@/settings/billing/states/billingHasPaymentMethodSelector';
+import { isSendInvoiceBillingSubscription } from '@/settings/billing/utils/isSendInvoiceBillingSubscription';
 import { isSubscriptionPaymentOverdue } from '@/settings/billing/utils/isSubscriptionPaymentOverdue';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSubscriptionStatus } from '@/workspace/hooks/useSubscriptionStatus';
@@ -30,7 +31,8 @@ import { useMutation } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { Section, useToast } from 'twenty-ui/components';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
 import { IconClockPlay, IconCoins, IconTag } from 'twenty-ui/icon';
 import {
   BillingPlanKey,
@@ -136,8 +138,9 @@ export const SettingsBillingSubscriptionInfo = ({
     await endTrialPeriod({ skipPaymentMethodRedirect: true });
   };
 
-  const { [PermissionFlagType.WORKSPACE]: hasPermissionToEndTrialPeriod } =
-    usePermissionFlagMap();
+  const hasPermissionToEndTrialPeriod = useHasPermissionFlag(
+    PermissionFlagType.WORKSPACE,
+  );
 
   const {
     seats,
@@ -181,11 +184,17 @@ export const SettingsBillingSubscriptionInfo = ({
     ? t`End date`
     : t`Renewal date`;
 
+  const isSendInvoice = isSendInvoiceBillingSubscription(
+    currentBillingSubscription.collectionMethod,
+  );
+
   const subscriptionDescription =
     isCancellationScheduled && isDefined(scheduledCancellationDateLabel)
       ? t`Your subscription is scheduled to end on ${scheduledCancellationDateLabel}. You will keep access until then`
       : isDefined(totalRenewDate)
-        ? t`Next charge ${totalRenewDate}. Invoice amount may vary if you add members or credits between periods`
+        ? isSendInvoice
+          ? t`Next invoice ${totalRenewDate}. Invoice amount may vary if you add members or credits between periods`
+          : t`Next charge ${totalRenewDate}. Invoice amount may vary if you add members or credits between periods`
         : t`Invoice amount may vary if you add members or credits between periods`;
 
   const planLabel =
@@ -198,9 +207,11 @@ export const SettingsBillingSubscriptionInfo = ({
       : t`organization plan`;
   const intervalUnit =
     currentInterval === SubscriptionInterval.Month ? t`month` : t`year`;
-  const startSubscriptionSubtitle = isDefined(perSeatPriceDisplay)
-    ? t`We will activate your $${perSeatPriceDisplay}/user/${intervalUnit} ${planName}. Do you want to proceed?`
-    : t`We will activate your ${planName}. Do you want to proceed?`;
+  const startSubscriptionSubtitle = isSendInvoice
+    ? t`We will activate your ${planName} and email your invoice now. Do you want to proceed?`
+    : isDefined(perSeatPriceDisplay)
+      ? t`We will activate your $${perSeatPriceDisplay}/user/${intervalUnit} ${planName}. Do you want to proceed?`
+      : t`We will activate your ${planName}. Do you want to proceed?`;
 
   const statusDescriptor = (() => {
     if (isCancellationScheduled) {

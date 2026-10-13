@@ -2,6 +2,7 @@ import { Dialog } from 'twenty-ui/primitives/surfaces';
 import { DialogInstance } from '@/ui/layout/dialog/components/DialogInstance';
 import { AppConnectionHeader } from '@/applications/components/AppConnectionHeader';
 import { AuthorizeActionButtons } from '@/applications/components/AuthorizeActionButtons';
+import { buildApplicationBillingSummary } from '@/marketplace/utils/buildApplicationBillingSummary';
 import { buildApplicationCapabilitySummary } from '@/marketplace/utils/buildApplicationCapabilitySummary';
 import {
   buildPermissionSummaryFromRoleManifest,
@@ -12,7 +13,7 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useMemo } from 'react';
 import { type RoleManifest } from 'twenty-shared/application';
-import { LightButton } from 'twenty-ui/components';
+import { LightButton } from 'twenty-ui/components/input';
 import { IconChevronLeft } from 'twenty-ui/icon';
 import { themeCssVariables } from 'twenty-ui/theme';
 
@@ -22,6 +23,7 @@ type SettingsApplicationInstallPermissionValidationModalProps = {
   appLogoUrl?: string;
   defaultRole?: RoleManifest;
   requestedCapabilities?: string[];
+  billsCredits?: boolean;
   onAuthorize: () => void;
   isInstalling?: boolean;
 };
@@ -97,6 +99,7 @@ export const SettingsApplicationInstallPermissionValidationModal = ({
   appLogoUrl,
   defaultRole,
   requestedCapabilities = [],
+  billsCredits = false,
   onAuthorize,
   isInstalling,
 }: SettingsApplicationInstallPermissionValidationModalProps) => {
@@ -110,8 +113,9 @@ export const SettingsApplicationInstallPermissionValidationModal = ({
     return [
       ...rolePermissionItems,
       ...buildApplicationCapabilitySummary(requestedCapabilities),
+      ...buildApplicationBillingSummary(billsCredits),
     ];
-  }, [requestedCapabilities, defaultRole]);
+  }, [requestedCapabilities, defaultRole, billsCredits]);
 
   const handleAuthorize = () => {
     closeDialog(modalInstanceId);
@@ -128,10 +132,10 @@ export const SettingsApplicationInstallPermissionValidationModal = ({
       dismissible
       onClose={handleClose}
     >
-      {({ container, backdrop, viewportProps, onKeyDown }) => (
+      {({ onKeyDown }) => (
         <Dialog.Popup
           aria-label={t`Install ${appDisplayName} on your workspace`}
-          {...{ container, backdrop, viewportProps, onKeyDown }}
+          onKeyDown={onKeyDown}
           size="fullscreen"
           style={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
         >
