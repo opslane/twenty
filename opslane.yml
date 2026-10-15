@@ -31,8 +31,9 @@ services:
           prices:
             - { currency: usd, unit_amount: 0, recurring: { interval: month }, metadata: { credit_amount: "5000000" } }
             - { currency: usd, unit_amount: 2000, recurring: { interval: month }, metadata: { credit_amount: "20000000" } }
-            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "5000000" } }
-            - { currency: usd, unit_amount: 20000, recurring: { interval: year }, metadata: { credit_amount: "20000000" } }
+            # A yearly price's credit_amount is for the year (Twenty scales by 12 between intervals).
+            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "60000000" } }
+            - { currency: usd, unit_amount: 20000, recurring: { interval: year }, metadata: { credit_amount: "240000000" } }
         - name: Enterprise
           metadata: { planKey: ENTERPRISE, productKey: BASE_PRODUCT, priceUsageBased: LICENSED }
           prices:
@@ -42,7 +43,7 @@ services:
           metadata: { planKey: ENTERPRISE, productKey: RESOURCE_CREDIT, priceUsageBased: LICENSED }
           prices:
             - { currency: usd, unit_amount: 0, recurring: { interval: month }, metadata: { credit_amount: "10000000" } }
-            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "10000000" } }
+            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "120000000" } }
 env:
   PG_DATABASE_URL: postgres://app:app@pg:5432/app
   SERVER_URL: http://localhost:3000
