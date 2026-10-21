@@ -1,0 +1,80 @@
+dockerfile: packages/twenty-docker/twenty/Dockerfile
+build_target: twenty
+port: 3000
+health_path: /healthz
+services:
+  - type: postgres
+    version: postgres:16
+    extensions: [uuid-ossp, unaccent]
+  - redis
+  # Stripe billing on Opslane's Stripe twin (no real Stripe): Twenty's keys are forced to the twin's dummies, its
+  # webhook endpoint gets clover events (Twenty's stripe-node 20 speaks 2026-02-25.clover), and the twin starts with
+  # Twenty's plan catalog (the products, prices and meter billing:sync-plans-data reads).
+  - type: stripe
+    secret_key_env: [BILLING_STRIPE_API_KEY]
+    publishable_key_env: [BILLING_STRIPE_PUBLISHABLE_KEY]
+    webhooks:
+      - path: /webhooks/stripe
+        secret_env: [BILLING_STRIPE_WEBHOOK_SECRET]
+        api_version: 2026-02-25.clover
+    catalog:
+      meters:
+        - { display_name: Workflow node executions, event_name: WORKFLOW_NODE_RUN }
+      products:
+        - name: Pro
+          metadata: { planKey: PRO, productKey: BASE_PRODUCT, priceUsageBased: LICENSED }
+          prices:
+            - { currency: usd, unit_amount: 900, recurring: { interval: month }, default: true }
+            - { currency: usd, unit_amount: 9000, recurring: { interval: year } }
+        - name: Pro credits
+          metadata: { planKey: PRO, productKey: RESOURCE_CREDIT, priceUsageBased: LICENSED }
+          prices:
+            - { currency: usd, unit_amount: 0, recurring: { interval: month }, metadata: { credit_amount: "5000000" } }
+            - { currency: usd, unit_amount: 2000, recurring: { interval: month }, metadata: { credit_amount: "20000000" } }
+            # A yearly price's credit_amount is for the year (Twenty scales by 12 between intervals).
+            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "60000000" } }
+            - { currency: usd, unit_amount: 20000, recurring: { interval: year }, metadata: { credit_amount: "240000000" } }
+        - name: Enterprise
+          metadata: { planKey: ENTERPRISE, productKey: BASE_PRODUCT, priceUsageBased: LICENSED }
+          prices:
+            - { currency: usd, unit_amount: 1900, recurring: { interval: month }, default: true }
+            - { currency: usd, unit_amount: 19000, recurring: { interval: year } }
+        - name: Enterprise credits
+          metadata: { planKey: ENTERPRISE, productKey: RESOURCE_CREDIT, priceUsageBased: LICENSED }
+          prices:
+            - { currency: usd, unit_amount: 0, recurring: { interval: month }, metadata: { credit_amount: "10000000" } }
+            - { currency: usd, unit_amount: 0, recurring: { interval: year }, metadata: { credit_amount: "120000000" } }
+env:
+  PG_DATABASE_URL: postgres://app:app@pg:5432/app
+  SERVER_URL: http://localhost:3000
+  APP_SECRET: 073bfe7164f9d0605cf926b2042fbcae2d4dcf258a987def7b43ec50e3570d02
+  ENCRYPTION_KEY: 073bfe7164f9d0605cf926b2042fbcae2d4dcf258a987def7b43ec50e3570d02
+  STORAGE_TYPE: local
+  IS_BILLING_ENABLED: "true"
+  BILLING_PLAN_REQUIRED_LINK: http://localhost:3000/plan-required
+  SIGN_IN_PREFILLED: "true"
+  DISABLE_CRON_JOBS_REGISTRATION: "true"
+migrate: yarn database:init:prod
+# The dev seed's billing rows point at a Stripe customer and subscription that exist nowhere (cus_default0,
+# sub_default0): they're removed, so the Apple workspace subscribes through Stripe like a new one. Then Twenty reads
+# its plans from Stripe (the twin's catalog).
+seed: >-
+  yarn command:prod workspace:seed:dev --light &&
+  node -e "const {Client}=require('/app/node_modules/pg');const c=new Client({connectionString:process.env.PG_DATABASE_URL});c.connect().then(()=>c.query('delete from core.\"billingSubscriptionItem\"; delete from core.\"billingSubscription\"; delete from core.\"billingCustomer\"')).then(()=>c.end()).catch(e=>{console.error(e);process.exit(1)})" &&
+  yarn command:prod billing:sync-plans-data
+verify_setup:
+  instructions: |
+    Seeded login: tim@apple.dev / tim@apple.dev (Admin of the "Apple" workspace).
+    Sign in at /welcome with "Continue with Email"; the credentials are prefilled.
+    Billing is on, on Stripe's twin: the Apple workspace has no subscription, so after sign-in Twenty asks for a plan.
+    Choosing one opens Stripe Checkout (the twin's hosted page at checkout.stripe.com): pick a test card and
+    Subscribe, and it returns to Twenty, which activates the workspace from Stripe's webhook.
+    The light seed creates only the Apple workspace with up to 5 records per object.
+notes: |
+  Single container: the server serves the built frontend. No worker process runs, so
+  background jobs (email sync, workflows queued to the worker) do not execute. Stripe webhooks are handled
+  in the request (POST /webhooks/stripe), not queued.
+  The entrypoint runs cache flush and upgrade on boot; migrate initializes the schema first
+  because the seed needs it (one-shots bypass the entrypoint).
+  Twenty's in-app card form (Stripe Elements, loaded from js.stripe.com) is not available: billing runs through
+  hosted Checkout and the billing portal.
