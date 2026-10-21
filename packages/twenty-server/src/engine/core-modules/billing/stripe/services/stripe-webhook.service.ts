@@ -1,3 +1,4 @@
+// Webhook endpoints are created on the Stripe account the billing key belongs to.
 /* @license Enterprise */
 
 import { Injectable, Logger } from '@nestjs/common';
